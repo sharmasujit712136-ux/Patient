@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Emergency Ambulance Premium</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Poppins',sans-serif;}
+body{background:#eef2f7;}
+
+header{
+background:linear-gradient(135deg,#c62828,#0d47a1);
+color:white;
+padding:20px;
+text-align:center;
+font-size:18px;
+font-weight:600;
+border-bottom-left-radius:25px;
+border-bottom-right-radius:25px;
+}
+
+.banner{
+background:#f8d7da;
+color:#c62828;
+text-align:center;
+padding:12px;
+font-weight:500;
+}
+
+.card{
+background:#f3f4f6;
+margin:18px;
+padding:20px;
+border-radius:25px;
+}
+
+.card h3{
+color:#1e3a8a;
+margin-bottom:15px;
+}
+
+.wallet{
+font-size:22px;
+font-weight:700;
+color:#2e7d32;
+}
+
+input{
+width:100%;
+padding:15px;
+margin-top:12px;
+border-radius:18px;
+border:1px solid #ddd;
+font-size:14px;
+}
+
+button{
+width:100%;
+padding:15px;
+margin-top:15px;
+border-radius:25px;
+border:none;
+font-size:15px;
+font-weight:600;
+cursor:pointer;
+}
+
+.btn-red{background:#e53935;color:white;}
+.btn-green{background:#0f6b57;color:white;}
+.btn-blue{background:#1e4fa3;color:white;}
+.btn-grey{background:#ffffff;border:1px solid #ccc;}
+
+.status{
+margin-top:15px;
+font-weight:600;
+color:#2e7d32;
+}
+
+#map{
+height:280px;
+margin:18px;
+border-radius:25px;
+}
+
+.hospital-list{
+display:none;
+margin-top:15px;
+}
+
+.hospital-item{
+padding:10px 0;
+border-bottom:1px solid #ddd;
+font-size:14px;
+}
+
+.call-btn{
+background:#e53935;
+color:white;
+border:none;
+padding:5px 12px;
+border-radius:10px;
+font-size:12px;
+float:right;
+}
+
+footer{
+text-align:center;
+padding:20px;
+color:#888;
+font-size:13px;
+}
+</style>
+</head>
+
+<body>
+
+<header> Emergency Ambulance Service</header>
+
+<div class="banner" id="adminMessage">Loading message...</div>
+
+<div class="card">
+<h3> Wallet</h3>
+<div class="wallet"><span id="walletBalance">0</span></div>
+</div>
+
+<div id="map"></div>
+
+<div class="card">
+<h3> Book Ambulance</h3>
+
+<input type="text" id="name" placeholder="Your Name">
+<input type="tel" id="phone" placeholder="Phone Number">
+
+<button class="btn-red" onclick="bookAmbulance()">Book Now</button>
+
+<div class="status" id="status">Status: Not Booked</div>
+</div>
+
+<div class="card">
+<h3> Medical Video Call</h3>
+
+<button class="btn-green">Doctor Video Call</button>
+<button class="btn-green">Nurse Video Call</button>
+<button class="btn-green">Technologist Video Call</button>
+</div>
+
+<div class="card">
+<h3> Share App</h3>
+<button class="btn-blue" onclick="shareApp()">Share with Others</button>
+</div>
+
+<div class="card">
+<h3> Nearby Hospitals & Labs</h3>
+<button class="btn-grey" onclick="toggleHospitals()">Show / Hide List</button>
+
+<div class="hospital-list" id="hospitalList">
+<div class="hospital-item">AIIMS Delhi <button class="call-btn" onclick="callNow('01126588500')">Call</button></div>
+<div class="hospital-item">Apollo Hospital <button class="call-btn" onclick="callNow('01126925858')">Call</button></div>
+<div class="hospital-item">Fortis Hospital <button class="call-btn" onclick="callNow('01142776222')">Call</button></div>
+<div class="hospital-item">Dr Lal PathLabs <button class="call-btn" onclick="callNow('01149885050')">Call</button></div>
+</div>
+</div>
+
+<footer>© 2026 Emergency Ambulance Premium</footer>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, onValue, push, set, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDu8l_5KV069EF2brdelpFSeD-RvYUPHYo",
+  authDomain: "suijit-1b27f.firebaseapp.com",
+  databaseURL: "https://suijit-1b27f-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "suijit-1b27f",
+  storageBucket: "suijit-1b27f.firebasestorage.app",
+  messagingSenderId: "828478604244",
+  appId: "1:828478604244:web:a75d380712e4a641bdcc41",
+  measurementId: "G-V65LW3L97S"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// Map Setup with Ambulance Icon
+let map = L.map('map').setView([28.6139,77.2090],12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+const ambIcon = L.icon({
+    iconUrl: 'https://cdn-icons-png.flaticon.com/512/1048/1048315.png', // Ambulance PNG
+    iconSize: [35, 35],
+    iconAnchor: [17, 35]
+});
+
+/* Real-time Data Fetching */
+onValue(ref(db,"wallet"), (snapshot)=> { document.getElementById("walletBalance").innerText = snapshot.val() || 0; });
+onValue(ref(db,"bannerMessage"), (snapshot)=> { document.getElementById("adminMessage").innerText = snapshot.val() || "Welcome"; });
+
+/* Auto-Assign Logic (Nearest 6) */
+function getDistance(lat1, lon1, lat2, lon2) {
+    return Math.sqrt(Math.pow(lat2 - lat1, 2) + Math.pow(lon2 - lon1, 2));
+}
+
+window.bookAmbulance = async function(){
+    let name = document.getElementById("name").value;
+    let phone = document.getElementById("phone").value;
+    if(!name || !phone){ alert("Enter details properly"); return; }
+
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+        const uLat = pos.coords.latitude;
+        const uLng = pos.coords.longitude;
+        map.setView([uLat, uLng], 15);
+        L.marker([uLat, uLng]).addTo(map).bindPopup("You").openPopup();
+
+        // 1. Get all drivers
+        const driversSnap = await get(ref(db, "drivers"));
+        let nearbyDrivers = [];
+
+        if (driversSnap.exists()) {
+            const driversData = driversSnap.val();
+            for (let id in driversData) {
+                let d = driversData[id];
+                if(d.available){
+                    let dist = getDistance(uLat, uLng, d.lat, d.lng);
+                    nearbyDrivers.push({ id, ...d, dist });
+                }
+            }
+        }
+
+        // 2. Sort and pick nearest 6
+        nearbyDrivers.sort((a, b) => a.dist - b.dist);
+        let assignedDrivers = nearbyDrivers.slice(0, 6).map(d => d.id);
+
+        // 3. Create Real Booking in DB
+        let bookingRef = push(ref(db,"bookings"));
+        set(bookingRef,{
+            name, phone, status:"searching",
+            userLat: uLat, userLng: uLng,
+            timestamp: Date.now(),
+            assignedTo: assignedDrivers
+        });
+
+        document.getElementById("status").innerText = "Status:  Request sent to 6 nearest drivers...";
+        
+        // Add markers for nearby ambulances
+        nearbyDrivers.slice(0, 6).forEach(d => {
+            L.marker([d.lat, d.lng], {icon: ambIcon}).addTo(map).bindPopup("Nearby Ambulance");
+        });
+    });
+};
+
+/* Global Functions */
+window.shareApp = () => { navigator.share ? navigator.share({title:'Emergency Ambulance', url:window.location.href}) : alert("Link: "+window.location.href); };
+window.toggleHospitals = () => { let list = document.getElementById("hospitalList"); list.style.display = list.style.display === "block" ? "none" : "block"; };
+window.callNow = (num) => { window.location.href = "tel:"+num; };
+</script>
+
+</body>
+</html>
